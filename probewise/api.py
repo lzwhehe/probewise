@@ -13,6 +13,7 @@ import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -32,12 +33,23 @@ engine = Engine(checkpointer=SqliteSaver(_conn))
 _bench_cache: dict = {}
 _bench_lock = threading.Lock()
 
+# 部署在网关子路径下时（网关会去掉前缀再转发），PUBLIC_PATH 只用来告诉 API 文档对外地址，
+# 不设置 FastAPI 的 root_path，以免静态文件路由匹配出错
+PUBLIC_PATH = os.environ.get("PUBLIC_PATH", "")
 app = FastAPI(
     title="Probewise API",
     version=__version__,
     description="证据驱动的安全告警研判：每个判定都附带可独立验证的证明。",
-    root_path=os.environ.get("ROOT_PATH", ""),
+    docs_url=None,
+    redoc_url=None,
+    servers=[{"url": PUBLIC_PATH}] if PUBLIC_PATH else None,
 )
+
+
+@app.get("/docs", include_in_schema=False)
+def docs():
+    # 用相对路径加载 openapi.json，挂在任何子路径下都能工作
+    return get_swagger_ui_html(openapi_url="openapi.json", title="Probewise API")
 
 
 class RunRequest(BaseModel):
