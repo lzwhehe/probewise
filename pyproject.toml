@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "probewise"
+version = "0.1.0"
+description = "Evidence-backed security alert triage on LangGraph: every verdict ships with a proof you can verify."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Zhuowen Liu" }]
+keywords = ["security", "soc", "alert-triage", "langgraph", "mcp", "agent", "explainable-ai"]
+dependencies = [
+  "langgraph>=1.0",
+  "langgraph-checkpoint-sqlite>=3.0",
+  "mcp>=2.0",
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "opentelemetry-sdk>=1.30",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+otlp = ["opentelemetry-exporter-otlp-proto-http>=1.30"]
+
+[project.scripts]
+probewise = "probewise.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["probewise*"]
+
+[tool.setuptools.package-data]
+probewise = ["data/*.json", "data/rag/*.md"]

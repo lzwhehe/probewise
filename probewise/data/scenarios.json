@@ -1,0 +1,149 @@
+{
+  "note": "合成的教学场景：主机名、账号、IP（RFC 5737 文档地址段）、域名（.example）和哈希均为虚构，不对应任何真实系统。world 字段是「如果去查，会查到什么」的地面真值，只有调查时才会被逐项揭示。",
+  "scenarios": [
+    {
+      "id": "A-001", "type": "suspicious_login", "severity": "high", "time": "2026-10-13 02:14",
+      "title": "财务人员账号 10 分钟内从两个国家登录",
+      "summary": "j.chen（财务部）先在上海办公网登录，10 分钟后又从境外地址 203.0.113.77 登录。",
+      "entities": { "user": "j.chen", "host": "FIN-LT-0231", "indicator": "203.0.113.77", "ticket": "-" },
+      "ground_truth": "malicious",
+      "world": { "auth_context": "mfa_push_burst", "user_baseline": "first_seen", "ioc_reputation": "known_bad", "change_ticket": "none" }
+    },
+    {
+      "id": "A-002", "type": "suspicious_login", "severity": "medium", "time": "2026-10-13 09:41",
+      "title": "销售人员从新加坡酒店网络登录",
+      "summary": "l.wang（华南销售）出差期间从新加坡的酒店网络登录邮箱。",
+      "entities": { "user": "l.wang", "host": "SAL-LT-0087", "indicator": "198.51.100.23", "ticket": "-" },
+      "ground_truth": "benign",
+      "world": { "auth_context": "known_device_mfa", "user_baseline": "unusual", "ioc_reputation": "unknown", "change_ticket": "none" }
+    },
+    {
+      "id": "A-003", "type": "suspicious_login", "severity": "medium", "time": "2026-10-13 22:05",
+      "title": "运维人员登录地突然变化",
+      "summary": "k.zhou（运维）的登录地从北京变为香港，当晚正在切换 VPN 出口。",
+      "entities": { "user": "k.zhou", "host": "OPS-WS-0012", "indicator": "192.0.2.10", "ticket": "CHG-20261013-04" },
+      "ground_truth": "benign",
+      "world": { "auth_context": "known_device_mfa", "user_baseline": "typical", "ioc_reputation": "known_good", "change_ticket": "approved_change" }
+    },
+    {
+      "id": "A-004", "type": "malware_execution", "severity": "high", "time": "2026-10-13 10:22",
+      "title": "临时目录中的未签名程序被执行",
+      "summary": "FIN-LT-0231 上执行了下载目录中的未签名程序 invoice_viewer.exe。",
+      "entities": { "user": "j.chen", "host": "FIN-LT-0231", "indicator": "sha256:9f2c…a71d（invoice_viewer.exe）", "ticket": "-" },
+      "ground_truth": "malicious",
+      "world": { "process_tree": "suspicious_lineage", "peer_prevalence": "rare", "ioc_reputation": "unknown", "edr_corroboration": "related_detections", "sandbox_detonation": "malicious_behavior" }
+    },
+    {
+      "id": "A-005", "type": "malware_execution", "severity": "medium", "time": "2026-10-13 15:03",
+      "title": "开发机运行自编译测试工具",
+      "summary": "DEV-WS-0418 运行了本地编译、未签名的测试程序 perf_probe.exe。",
+      "entities": { "user": "h.xu", "host": "DEV-WS-0418", "indicator": "sha256:41be…0c9e（perf_probe.exe）", "ticket": "-" },
+      "ground_truth": "benign",
+      "world": { "process_tree": "expected_lineage", "peer_prevalence": "rare", "ioc_reputation": "unknown", "edr_corroboration": "none", "sandbox_detonation": "clean" }
+    },
+    {
+      "id": "A-006", "type": "malware_execution", "severity": "low", "time": "2026-10-13 11:30",
+      "title": "IT 推送的打印驱动安装程序",
+      "summary": "多台办公电脑执行了 IT 统一推送的新版打印驱动安装程序。",
+      "entities": { "user": "system", "host": "ADM-LT-0055", "indicator": "sha256:77d0…e412（printer_setup.exe）", "ticket": "CHG-20261013-01" },
+      "ground_truth": "benign",
+      "world": { "process_tree": "expected_lineage", "peer_prevalence": "widespread", "ioc_reputation": "known_good", "edr_corroboration": "none", "sandbox_detonation": "clean" }
+    },
+    {
+      "id": "A-007", "type": "beaconing", "severity": "high", "time": "2026-10-13 03:47",
+      "title": "主机每 60 秒访问一个新注册的域名",
+      "summary": "HR-PC-0112 以 60 秒的固定间隔访问 cdn-update-check.example。",
+      "entities": { "user": "m.sun", "host": "HR-PC-0112", "indicator": "cdn-update-check.example", "ticket": "-" },
+      "ground_truth": "malicious",
+      "world": { "ioc_reputation": "known_bad", "peer_prevalence": "rare", "process_tree": "suspicious_lineage", "edr_corroboration": "related_detections", "data_volume": "normal" }
+    },
+    {
+      "id": "A-008", "type": "beaconing", "severity": "low", "time": "2026-10-13 08:00",
+      "title": "多台主机定时访问软件遥测地址",
+      "summary": "大量主机按固定间隔访问 telemetry.vendor.example。",
+      "entities": { "user": "system", "host": "ENG-WS-0201", "indicator": "telemetry.vendor.example", "ticket": "-" },
+      "ground_truth": "benign",
+      "world": { "ioc_reputation": "known_good", "peer_prevalence": "widespread", "process_tree": "expected_lineage", "edr_corroboration": "none", "data_volume": "normal" }
+    },
+    {
+      "id": "A-009", "type": "beaconing", "severity": "medium", "time": "2026-10-13 01:12",
+      "title": "陌生域名的周期性连接，情报无记录",
+      "summary": "LAB-SRV-0007 周期性连接 sync-metrics.example，该域名在情报源中没有记录。",
+      "entities": { "user": "svc_lab", "host": "LAB-SRV-0007", "indicator": "sync-metrics.example", "ticket": "-" },
+      "ground_truth": "malicious",
+      "world": { "ioc_reputation": "unknown", "peer_prevalence": "rare", "process_tree": "suspicious_lineage", "edr_corroboration": "none", "data_volume": "spike" }
+    },
+    {
+      "id": "A-010", "type": "privileged_account_change", "severity": "high", "time": "2026-10-13 03:20",
+      "title": "凌晨新建域管理员账号",
+      "summary": "凌晨 3 点新建账号 svc_backup2 并加入 Domain Admins。",
+      "entities": { "user": "svc_backup2", "host": "DC-01", "indicator": "svc_backup2", "ticket": "-" },
+      "ground_truth": "malicious",
+      "world": { "change_ticket": "none", "user_baseline": "first_seen", "auth_context": "legacy_protocol", "edr_corroboration": "related_detections" }
+    },
+    {
+      "id": "A-011", "type": "privileged_account_change", "severity": "medium", "time": "2026-10-13 14:10",
+      "title": "为新入职 DBA 授予数据库管理员权限",
+      "summary": "账号 y.he 被加入 DB-Admins 组。",
+      "entities": { "user": "y.he", "host": "DC-01", "indicator": "y.he", "ticket": "CHG-20261013-07" },
+      "ground_truth": "benign",
+      "world": { "change_ticket": "approved_change", "user_baseline": "typical", "auth_context": "known_device_mfa", "edr_corroboration": "none" }
+    },
+    {
+      "id": "A-012", "type": "bulk_upload", "severity": "high", "time": "2026-10-13 19:55",
+      "title": "离职前向个人网盘上传 4.2 GB",
+      "summary": "研发 z.li（已提交离职）向个人网盘 personal-drive.example 上传了 4.2 GB 文件。",
+      "entities": { "user": "z.li", "host": "RND-WS-0333", "indicator": "personal-drive.example", "ticket": "-" },
+      "ground_truth": "malicious",
+      "world": { "data_volume": "spike", "user_baseline": "first_seen", "change_ticket": "none", "ioc_reputation": "unknown", "peer_prevalence": "rare" }
+    },
+    {
+      "id": "A-013", "type": "bulk_upload", "severity": "medium", "time": "2026-10-13 23:30",
+      "title": "夜间备份任务向公司云存储同步",
+      "summary": "备份服务器夜间向公司云存储 backup.corp.example 同步了 120 GB。",
+      "entities": { "user": "svc_backup", "host": "BAK-SRV-0002", "indicator": "backup.corp.example", "ticket": "CHG-20261001-02" },
+      "ground_truth": "benign",
+      "world": { "data_volume": "spike", "user_baseline": "typical", "change_ticket": "approved_change", "ioc_reputation": "known_good", "peer_prevalence": "widespread" }
+    },
+    {
+      "id": "A-014", "type": "office_child_process", "severity": "high", "time": "2026-10-13 10:48",
+      "title": "Word 打开邮件附件后派生脚本解释器",
+      "summary": "WINWORD.EXE 打开附件 报价单.docm 后，派生出脚本解释器进程。",
+      "entities": { "user": "q.zhao", "host": "PUR-LT-0090", "indicator": "sha256:c3a1…5b20（报价单.docm）", "ticket": "-" },
+      "ground_truth": "malicious",
+      "world": { "process_tree": "suspicious_lineage", "sandbox_detonation": "malicious_behavior", "edr_corroboration": "related_detections", "peer_prevalence": "rare" }
+    },
+    {
+      "id": "A-015", "type": "office_child_process", "severity": "low", "time": "2026-10-13 09:15",
+      "title": "Excel 宏调用内部报表脚本",
+      "summary": "财务月报模板中的宏调用了已备案的内部报表脚本。",
+      "entities": { "user": "r.feng", "host": "FIN-LT-0102", "indicator": "sha256:0d4e…91aa（月报模板.xlsm）", "ticket": "-" },
+      "ground_truth": "benign",
+      "world": { "process_tree": "expected_lineage", "sandbox_detonation": "clean", "edr_corroboration": "none", "peer_prevalence": "widespread" }
+    },
+    {
+      "id": "A-016", "type": "suspicious_login", "severity": "medium", "time": "2026-10-13 06:58",
+      "title": "新设备在清晨登录管理后台",
+      "summary": "t.gao 用一台从未见过的设备登录了管理后台，MFA 通过。",
+      "entities": { "user": "t.gao", "host": "ADM-PORTAL", "indicator": "198.51.100.140", "ticket": "-" },
+      "ground_truth": "malicious",
+      "world": { "auth_context": "new_device", "user_baseline": "unusual", "ioc_reputation": "unknown", "change_ticket": "none" }
+    },
+    {
+      "id": "A-017", "type": "malware_execution", "severity": "high", "time": "2026-10-13 13:36",
+      "title": "沙箱超时的可疑程序",
+      "summary": "MKT-LT-0144 执行了浏览器下载目录中的 font_pack_installer.exe，沙箱运行超时。",
+      "entities": { "user": "w.lin", "host": "MKT-LT-0144", "indicator": "sha256:5e7b…d3c8（font_pack_installer.exe）", "ticket": "-" },
+      "ground_truth": "malicious",
+      "world": { "process_tree": "suspicious_lineage", "peer_prevalence": "rare", "ioc_reputation": "unknown", "edr_corroboration": "related_detections", "sandbox_detonation": "timeout" }
+    },
+    {
+      "id": "A-018", "type": "bulk_upload", "severity": "medium", "time": "2026-10-13 17:20",
+      "title": "市场部上传大量视频素材到外部协作平台",
+      "summary": "市场部 s.ma 向外部协作平台 collab.example 上传了 9 GB 视频素材。",
+      "entities": { "user": "s.ma", "host": "MKT-WS-0019", "indicator": "collab.example", "ticket": "-" },
+      "ground_truth": "benign",
+      "world": { "data_volume": "spike", "user_baseline": "unusual", "change_ticket": "none", "ioc_reputation": "unknown", "peer_prevalence": "widespread" }
+    }
+  ]
+}

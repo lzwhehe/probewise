@@ -1,0 +1,159 @@
+{
+  "version": "1.0",
+  "note": "教学用知识库：似然值是按 SOC 常识设定的示意参数，不是从真实数据统计得到的。可以按自己环境的历史工单重新标定。",
+  "thresholds": { "malicious": 0.95, "benign": 0.05 },
+  "probes": {
+    "ioc_reputation": {
+      "name": "威胁情报信誉",
+      "name_en": "IOC reputation",
+      "cost": 1,
+      "outcomes": {
+        "known_bad": { "label": "命中恶意情报", "p_mal": 0.55, "p_ben": 0.03, "text": "{indicator} 命中 3 个威胁情报源，标签为已知恶意基础设施，最近一次出现在 2 天前。" },
+        "unknown": { "label": "情报无记录", "p_mal": 0.40, "p_ben": 0.57, "text": "{indicator} 在已接入的情报源中没有记录。" },
+        "known_good": { "label": "可信白名单", "p_mal": 0.05, "p_ben": 0.40, "text": "{indicator} 属于已知可信服务（厂商官方地址或公司白名单）。" }
+      }
+    },
+    "peer_prevalence": {
+      "name": "全网流行度",
+      "name_en": "Peer prevalence",
+      "cost": 1,
+      "outcomes": {
+        "rare": { "label": "仅极少数主机出现", "p_mal": 0.85, "p_ben": 0.30, "text": "过去 30 天内，全公司只有 1 台主机出现过 {indicator}。" },
+        "widespread": { "label": "大量主机普遍出现", "p_mal": 0.15, "p_ben": 0.70, "text": "过去 30 天内，全公司有 260 多台主机出现过 {indicator}。" }
+      }
+    },
+    "change_ticket": {
+      "name": "变更工单核对",
+      "name_en": "Change ticket",
+      "cost": 1,
+      "outcomes": {
+        "approved_change": { "label": "有已审批变更", "p_mal": 0.04, "p_ben": 0.45, "text": "找到已审批的变更单 {ticket}，时间窗口和操作对象与告警一致。" },
+        "none": { "label": "无对应变更", "p_mal": 0.96, "p_ben": 0.55, "text": "告警时间窗口内没有与 {host} / {user} 相关的已审批变更。" }
+      }
+    },
+    "user_baseline": {
+      "name": "用户行为基线",
+      "name_en": "User behavior baseline",
+      "cost": 2,
+      "outcomes": {
+        "typical": { "label": "符合历史习惯", "p_mal": 0.10, "p_ben": 0.60, "text": "{user} 在过去 90 天里多次出现同类行为，属于日常习惯。" },
+        "unusual": { "label": "少见但有先例", "p_mal": 0.40, "p_ben": 0.30, "text": "{user} 过去 90 天里只出现过 1–2 次同类行为。" },
+        "first_seen": { "label": "首次出现", "p_mal": 0.50, "p_ben": 0.10, "text": "{user} 是第一次出现这种行为，与同部门的同事也明显不同。" }
+      }
+    },
+    "auth_context": {
+      "name": "认证上下文",
+      "name_en": "Authentication context",
+      "cost": 2,
+      "outcomes": {
+        "known_device_mfa": { "label": "常用设备 + MFA", "p_mal": 0.10, "p_ben": 0.70, "text": "登录来自 {user} 的常用设备，并完成了 MFA。" },
+        "new_device": { "label": "新设备", "p_mal": 0.35, "p_ben": 0.20, "text": "登录来自一台从未见过的设备，MFA 通过。" },
+        "legacy_protocol": { "label": "旧协议绕过 MFA", "p_mal": 0.25, "p_ben": 0.08, "text": "登录使用了不支持 MFA 的旧版认证协议。" },
+        "mfa_push_burst": { "label": "MFA 推送轰炸", "p_mal": 0.30, "p_ben": 0.02, "text": "登录前 5 分钟内 {user} 收到 14 次 MFA 推送，最后一次被批准。" }
+      }
+    },
+    "edr_corroboration": {
+      "name": "同主机关联检测",
+      "name_en": "EDR corroboration",
+      "cost": 2,
+      "outcomes": {
+        "related_detections": { "label": "有关联检测", "p_mal": 0.60, "p_ben": 0.05, "text": "{host} 在前后 24 小时内还有 3 条相关的 EDR 检测。" },
+        "none": { "label": "无关联检测", "p_mal": 0.40, "p_ben": 0.95, "text": "{host} 在前后 24 小时内没有其他相关检测。" }
+      }
+    },
+    "process_tree": {
+      "name": "进程链分析",
+      "name_en": "Process lineage",
+      "cost": 3,
+      "outcomes": {
+        "expected_lineage": { "label": "进程链正常", "p_mal": 0.15, "p_ben": 0.80, "text": "父子进程链与该软件的正常行为一致，可执行文件签名有效。" },
+        "suspicious_lineage": { "label": "进程链可疑", "p_mal": 0.75, "p_ben": 0.10, "text": "进程链不符合正常模式：从用户可写目录启动，且父进程不应派生该类子进程。" },
+        "unavailable": { "label": "数据缺失", "p_mal": 0.10, "p_ben": 0.10, "text": "该主机的进程审计数据缺失，无法还原进程链。" }
+      }
+    },
+    "data_volume": {
+      "name": "外发流量基线",
+      "name_en": "Egress volume baseline",
+      "cost": 2,
+      "outcomes": {
+        "spike": { "label": "外发量激增", "p_mal": 0.70, "p_ben": 0.20, "text": "{host} 的外发流量达到过去 30 天日均值的 40 倍以上。" },
+        "normal": { "label": "外发量正常", "p_mal": 0.30, "p_ben": 0.80, "text": "{host} 的外发流量在正常范围内。" }
+      }
+    },
+    "sandbox_detonation": {
+      "name": "沙箱动态分析",
+      "name_en": "Sandbox detonation",
+      "cost": 8,
+      "outcomes": {
+        "malicious_behavior": { "label": "沙箱判定恶意", "p_mal": 0.70, "p_ben": 0.02, "text": "沙箱运行后观察到持久化和可疑网络行为，判定为恶意。" },
+        "clean": { "label": "沙箱未见异常", "p_mal": 0.20, "p_ben": 0.90, "text": "沙箱运行 5 分钟，未观察到可疑行为。" },
+        "timeout": { "label": "沙箱超时", "p_mal": 0.10, "p_ben": 0.08, "text": "样本在沙箱中运行超时，没有得到结论。" }
+      }
+    }
+  },
+  "alert_types": {
+    "suspicious_login": {
+      "name": "异常登录",
+      "prior": 0.30,
+      "probes": ["auth_context", "user_baseline", "ioc_reputation", "change_ticket"],
+      "mitre": [{ "id": "T1078", "name": "Valid Accounts" }],
+      "response": [
+        { "id": "revoke_sessions", "name": "吊销该账号的所有会话", "approval": true },
+        { "id": "reset_credentials", "name": "强制重置密码并重新注册 MFA", "approval": true },
+        { "id": "block_source_ip", "name": "在边界封禁来源 IP", "approval": false }
+      ]
+    },
+    "malware_execution": {
+      "name": "可疑程序执行",
+      "prior": 0.40,
+      "probes": ["process_tree", "peer_prevalence", "ioc_reputation", "edr_corroboration", "sandbox_detonation"],
+      "mitre": [{ "id": "T1204", "name": "User Execution" }],
+      "response": [
+        { "id": "isolate_host", "name": "隔离主机（仅保留与 EDR 的连接）", "approval": true },
+        { "id": "block_hash", "name": "全网封禁该文件哈希", "approval": false },
+        { "id": "collect_triage_package", "name": "采集取证包", "approval": false }
+      ]
+    },
+    "beaconing": {
+      "name": "疑似 C2 外联",
+      "prior": 0.25,
+      "probes": ["ioc_reputation", "peer_prevalence", "process_tree", "edr_corroboration", "data_volume"],
+      "mitre": [{ "id": "T1071", "name": "Application Layer Protocol" }],
+      "response": [
+        { "id": "block_domain", "name": "在 DNS 和代理上封禁该域名", "approval": false },
+        { "id": "isolate_host", "name": "隔离主机（仅保留与 EDR 的连接）", "approval": true }
+      ]
+    },
+    "privileged_account_change": {
+      "name": "特权账号变更",
+      "prior": 0.20,
+      "probes": ["change_ticket", "user_baseline", "auth_context", "edr_corroboration"],
+      "mitre": [{ "id": "T1098", "name": "Account Manipulation" }],
+      "response": [
+        { "id": "disable_account", "name": "禁用新建的特权账号", "approval": true },
+        { "id": "review_audit_log", "name": "拉取该时段的目录服务审计日志", "approval": false }
+      ]
+    },
+    "bulk_upload": {
+      "name": "大量数据外传",
+      "prior": 0.15,
+      "probes": ["data_volume", "user_baseline", "change_ticket", "ioc_reputation", "peer_prevalence"],
+      "mitre": [{ "id": "T1567", "name": "Exfiltration Over Web Service" }],
+      "response": [
+        { "id": "suspend_upload", "name": "暂停该账号的外部上传权限", "approval": true },
+        { "id": "notify_dlp", "name": "通知数据防泄漏团队复核", "approval": false }
+      ]
+    },
+    "office_child_process": {
+      "name": "办公软件派生脚本",
+      "prior": 0.45,
+      "probes": ["process_tree", "sandbox_detonation", "edr_corroboration", "peer_prevalence"],
+      "mitre": [{ "id": "T1566", "name": "Phishing" }, { "id": "T1059", "name": "Command and Scripting Interpreter" }],
+      "response": [
+        { "id": "isolate_host", "name": "隔离主机（仅保留与 EDR 的连接）", "approval": true },
+        { "id": "purge_email", "name": "从所有邮箱中撤回同源邮件", "approval": true },
+        { "id": "block_hash", "name": "全网封禁附件哈希", "approval": false }
+      ]
+    }
+  }
+}
