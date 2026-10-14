@@ -22,7 +22,13 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
-from .kb import KnowledgeBase, find_scenario, load_scenarios
+import json
+
+from .kb import DATA_DIR, KnowledgeBase, find_scenario, load_scenarios
+from .netalert.checks import run_check
+from .netalert.fields import sanitize
+from .netalert.history import TicketHistory
+from .netalert.verify import verify_finding
 from .ledger import entropy, expected_info_gain, logit, sigmoid
 from .proof import GENESIS, chain_record, fmt, supporting_count, verdict_label
 from .rag import Retriever
@@ -38,7 +44,9 @@ PLAYBOOK_OF = {
     "privileged_account_change": "P-04",
     "bulk_upload": "P-05",
     "office_child_process": "P-06",
+    "web_attack": "P-07",
 }
+WEB = "web_attack"
 STRATEGIES = ("probewise", "probewise-robust", "playbook", "cheapest", "random")
 STRATEGY_NAMES = {
     "probewise": "Probewise 快速（信息增益 / 成本）",
@@ -61,6 +69,7 @@ class TriageState(TypedDict, total=False):
     reader_mode: str  # auto：内置读取器；external：由外部 Agent（如 Claude Code 经 MCP）读取
     world_overrides: dict
     prior: float
+    z: float  # 未校准的对数几率：logit(先验) + Σ 各证据的对数似然比
     posterior: float
     used: list
     rounds: list
@@ -84,7 +93,11 @@ def public_alert(scenario: dict, kb: KnowledgeBase) -> dict:
     """去掉 world 和 ground_truth：调查引擎只能看到告警本身。"""
     t = kb.alert_types[scenario["type"]]
     keep = ("id", "type", "severity", "time", "title", "summary", "entities")
-    return {**{k: scenario[k] for k in keep}, "type_name": t["name"], "mitre": t["mitre"]}
+    out = {**{k: scenario[k] for k in keep}, "type_name": t["name"], "mitre": t["mitre"]}
+    if scenario.get("record"):
+        # 原始告警记录供分析员查看；检查子 Agent 只用去掉采集伪特征后的视图，标签不进入引擎
+        out["record"] = sanitize(scenario["record"])  # 证据偏移量正是在这个视图上计算的
+    return out
 
 
 class Engine:
@@ -94,11 +107,50 @@ class Engine:
         self.reader = reader or RuleReader()
         self.retriever = retriever or Retriever()
         self.checkpointer = checkpointer if checkpointer is not None else InMemorySaver()
+        self._maybe_enable_llm_review()
+        hist_file = DATA_DIR / "web_history.json"
+        self.web_history = TicketHistory.from_json(json.loads(hist_file.read_text(encoding="utf-8"))) if hist_file.exists() else TicketHistory()
+        org_file = DATA_DIR / "demo_org_history.json"
+        if org_file.exists():  # 本单位自己的工单历史（演示用模拟数据），叠加在通用的规则历史之上
+            for kind, value, att, tot in json.loads(org_file.read_text(encoding="utf-8"))["counts"]:
+                c = self.web_history.counts[(kind, value)]
+                c[0] += att
+                c[1] += tot
         self.spans: dict[str, list] = {}
         self._tracers: dict[str, RunTracer] = {}
         self.graph = self._build()
 
+    def _maybe_enable_llm_review(self) -> None:
+        """配置了 OpenAI 兼容接口（如本地 Ollama）时，为网络攻击告警加上「大模型复核」子 Agent。
+        它成本高（4），只有便宜的检查都定不下来时，按信息增益 / 成本才会被选中。"""
+        import os
+
+        from .netalert.checks import CHECKS
+        from .netalert.llm_agent import OUTCOMES, LLMReviewAgent
+
+        self.checks = dict(CHECKS)  # 每个引擎自己的检查集合，不改模块级注册表
+        base, model = os.environ.get("PROBEWISE_LLM_BASE_URL"), os.environ.get("PROBEWISE_LLM_MODEL")
+        if not (base and model) or WEB not in self.kb.alert_types:
+            return
+        self.kb.alert_types[WEB] = {**self.kb.alert_types[WEB], "probes": list(self.kb.alert_types[WEB]["probes"])}
+        self.checks["llm_review"] = LLMReviewAgent(base, model, os.environ.get("PROBEWISE_LLM_API_KEY", ""))
+        self.kb.probes["llm_review"] = {"name": f"大模型复核（{model}，似然未经校准）", "cost": 4, "outcomes": {k: dict(v) for k, v in OUTCOMES.items()}}
+        if "llm_review" not in self.kb.alert_types[WEB]["probes"]:
+            self.kb.alert_types[WEB]["probes"].append("llm_review")
+
     # ---------- 节点 ----------
+
+    def _calibrated(self, alert_type: str, z: float) -> float:
+        c = self.kb.platt(alert_type)
+        return sigmoid(c["a"] * z + c["b"])
+
+    def _benign_guard(self, state) -> bool:
+        """网络攻击告警自动判误报的护栏：必须看过载荷且没有明确利用载荷，并至少做过 2 项检查。
+        防止攻击者先把某条规则「刷」成历史误报，再发真正的利用（反馈投毒）。"""
+        if state["alert"]["type"] != WEB:
+            return True
+        payload = next((r for r in state["rounds"] if r["probe"] == "payload_check"), None)
+        return payload is not None and payload["outcome"] != "explicit_exploit" and len(state["rounds"]) >= 2
 
     def _tracer(self, state: TriageState) -> RunTracer:
         return self._tracers[state["run_id"]]
@@ -114,7 +166,8 @@ class Engine:
             rec = chain_record(0, "alert", {"alert_id": alert["id"], "type": alert["type"], "prior": fmt(prior)}, GENESIS)
             return {
                 "prior": prior,
-                "posterior": prior,
+                "z": logit(prior),
+                "posterior": self._calibrated(alert["type"], logit(prior)),
                 "budget_left": state["budget"],
                 "used": [],
                 "rounds": [],
@@ -131,7 +184,8 @@ class Engine:
             label = verdict_label(p, self.kb.thresholds)
             if strategy != "playbook" and label != "escalate":
                 need = state.get("corroboration", 1)
-                if supporting(state["rounds"], label) >= need:
+                response_done = state["alert"]["type"] != WEB or "response_check" in state["used"] or "response_check" not in self.kb.probes_for(WEB)
+                if supporting(state["rounds"], label) >= need and (label != "benign" or self._benign_guard(state)) and (label != "malicious" or response_done):
                     return {"next_probe": None, "stop_reason": "后验已越过判定阈值，且有足够的同方向证据", "plan": {}}
 
             candidates = []
@@ -155,7 +209,15 @@ class Engine:
                 reason = "预算已用完" if candidates else "可用的检查都已执行"
                 return {"next_probe": None, "stop_reason": reason, "plan": {"candidates": candidates}}
 
-            if strategy.startswith("probewise"):
+            guard_payload = next((c for c in affordable if c["probe"] == "payload_check"), None)
+            guard_response = next((c for c in affordable if c["probe"] == "response_check"), None)
+            if strategy.startswith("probewise") and label == "malicious" and guard_response and state["alert"]["type"] == WEB:
+                chosen = guard_response
+                why = "已经足以判定为攻击；结案前再看一眼响应，确认攻击是否成功（决定要不要启动应急响应）"
+            elif strategy.startswith("probewise") and label == "benign" and guard_payload and not self._benign_guard(state):
+                chosen = guard_payload
+                why = "可疑度已经低于误报阈值，但结案为误报之前必须先核验载荷（防反馈投毒的护栏）"
+            elif strategy.startswith("probewise"):
                 chosen = max(affordable, key=lambda c: c["score"])
                 if chosen["info_gain"] < MIN_INFO_GAIN:
                     return {
@@ -189,28 +251,33 @@ class Engine:
         if overrides:
             scenario = {**scenario, "world": {**scenario["world"], **overrides}}
 
-        with tracer.span(
-            f"execute_tool {probe}",
-            **{"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": probe, "gen_ai.tool.type": "function", "probewise.cost": info["cost"]},
-        ) as span:
-            raw = MockToolkit(scenario, self.kb).run(probe)
-            if state.get("reader_mode") == "external":
-                # 外部 Agent 只负责「读」：把工具输出读成一个结论选项，判定权留在账本里
-                options = {k: o["label"] for k, o in info["outcomes"].items()}
-                answer = interrupt({"type": "reading", "probe": probe, "probe_name": info["name"], "raw_text": raw["text"], "options": options})
-                if answer.get("outcome") not in options:
-                    raise ValueError(f"外部读取结果 {answer.get('outcome')!r} 不在选项中")
-                reading = {"outcome": answer["outcome"], "reader": answer.get("reader", "external")}
-            else:
-                reading = self.reader.read(probe, raw, self.kb)
-            span.set_attribute("probewise.reader", reading["reader"])
-            span.set_attribute("probewise.outcome", reading["outcome"])
+        finding, verification = None, None
+        if state["alert"]["type"] == WEB:
+            reading, raw, finding, verification = self._investigate_web(state, probe, info, scenario, overrides, tracer)
+        else:
+            with tracer.span(
+                f"execute_tool {probe}",
+                **{"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": probe, "gen_ai.tool.type": "function", "probewise.cost": info["cost"]},
+            ) as span:
+                raw = MockToolkit(scenario, self.kb).run(probe)
+                if state.get("reader_mode") == "external":
+                    # 外部 Agent 只负责「读」：把工具输出读成一个结论选项，判定权留在账本里
+                    options = {k: o["label"] for k, o in info["outcomes"].items()}
+                    answer = interrupt({"type": "reading", "probe": probe, "probe_name": info["name"], "raw_text": raw["text"], "options": options})
+                    if answer.get("outcome") not in options:
+                        raise ValueError(f"外部读取结果 {answer.get('outcome')!r} 不在选项中")
+                    reading = {"outcome": answer["outcome"], "reader": answer.get("reader", "external")}
+                else:
+                    reading = self.reader.read(probe, raw, self.kb)
+                span.set_attribute("probewise.reader", reading["reader"])
+                span.set_attribute("probewise.outcome", reading["outcome"])
 
         o = self.kb.outcome(probe, reading["outcome"])
-        lr = o["p_mal"] / o["p_ben"]
-        delta = math.log(lr)
+        delta = 0.0 if reading.get("unverified") else self.kb.llr(probe, reading["outcome"])
+        lr = math.exp(delta)
         before = state["posterior"]
-        after = sigmoid(logit(before) + delta)
+        z = state.get("z", logit(state["prior"])) + delta
+        after = self._calibrated(state["alert"]["type"], z)
         rounds = list(state["rounds"])
         eid = f"E{len(rounds) + 1}"
         chain = list(state["chain"])
@@ -218,7 +285,7 @@ class Engine:
             chain_record(
                 len(chain),
                 "evidence",
-                {"evidence_id": eid, "probe": probe, "outcome": reading["outcome"], "lr": fmt(lr), "posterior": fmt(after)},
+                {"evidence_id": eid, "probe": probe, "outcome": reading["outcome"], "lr": fmt(lr), "posterior": fmt(after), **({"unverified": 1} if reading.get("unverified") else {})},
                 chain[-1]["hash"],
             )
         )
@@ -235,6 +302,9 @@ class Engine:
                 "reader": reading["reader"],
                 "misread": reading.get("misread", False),
                 "fallback_reason": reading.get("fallback_reason"),
+                "finding": finding,
+                "verification": verification,
+                "unverified": bool(reading.get("unverified")),
                 "counterfactual": probe in (state.get("world_overrides") or {}),
                 "lr": round(lr, 4),
                 "delta": round(delta, 4),
@@ -248,10 +318,36 @@ class Engine:
         return {
             "rounds": rounds,
             "chain": chain,
+            "z": z,
             "posterior": after,
             "used": [*state["used"], probe],
             "budget_left": state["budget_left"] - info["cost"],
         }
+
+    def _investigate_web(self, state, probe, info, scenario, overrides, tracer):
+        """派出取证子 Agent：在告警原文和团队历史工单上执行只读检查，交回结论 + 证据 + 步骤；
+        控制器逐字核验证据后才记账，核验不通过的结论记为「无法确认」（不计分）。"""
+        record = scenario["record"]
+        with tracer.span(
+            f"invoke_agent {probe}",
+            **{"gen_ai.operation.name": "invoke_agent", "gen_ai.agent.name": f"{probe}_investigator", "probewise.cost": info["cost"]},
+        ) as span:
+            finding = run_check(probe, record, {"history": self.web_history}, self.checks)
+            if probe in overrides:  # time-travel 反事实：把这项检查的结论改写为指定值
+                finding = {**finding, "outcome": overrides[probe], "counterfactual": True}
+            verification = verify_finding(finding, record, self.web_history, info["outcomes"], registry=self.checks)
+            if finding.get("counterfactual"):
+                verification = {"ok": True, "problems": [], "note": "反事实改写，不核验原文"}
+            span.set_attribute("probewise.outcome", finding["outcome"])
+            span.set_attribute("probewise.verified", verification["ok"])
+            for st in finding.get("steps", []):
+                with tracer.span(f"execute_tool {st['tool']}", **{"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": st["tool"]}):
+                    pass
+        reading = {"outcome": finding["outcome"], "reader": f"{finding.get('mode', 'runbook')} 子 Agent"}
+        if not verification["ok"]:
+            reading["unverified"] = True
+        raw = {"text": finding.get("summary", "")}
+        return reading, raw, finding, verification
 
     def decide(self, state: TriageState) -> dict:
         with self._tracer(state).span("chain decide", **{"probewise.node": "decide"}):
@@ -261,6 +357,10 @@ class Engine:
             uncorroborated = label != "escalate" and supporting(state["rounds"], label) < need
             if uncorroborated:
                 label = "escalate"
+            guard_failed = label == "benign" and not self._benign_guard(state)
+            if guard_failed:
+                label = "escalate"
+            success_sign = any(r["probe"] == "response_check" and r["outcome"] == "exploit_echo" for r in state["rounds"])
             contributions = sorted(
                 (
                     {
@@ -276,14 +376,22 @@ class Engine:
             )
             pro = [c for c in contributions if (c["delta"] > 0) == (label == "malicious")][:3]
             basis = "；".join(f"{c['evidence_id']} {c['probe_name']}：{c['outcome_label']}（似然比 ×{c['lr']:.2f}）" for c in pro)
-            if label == "malicious":
+            if label == "malicious" and success_sign:
+                summary = f"判定为真实攻击，且响应中出现利用成功的迹象，需立即启动应急响应。后验 {p:.3f}。主要依据：{basis}。"
+            elif label == "malicious":
                 summary = f"判定为真实威胁，后验 {p:.3f}。主要依据：{basis}。"
             elif label == "benign":
                 summary = f"判定为误报，后验 {p:.3f}。主要依据：{basis}。"
             else:
                 remaining = sorted(state.get("plan", {}).get("candidates", []), key=lambda c: -c["score"])
                 hint = f"如果条件允许，最值得补做的是「{remaining[0]['name']}」。" if remaining else ""
-                why = f"后验已越过阈值，但只有 {supporting(state['rounds'], verdict_label(p, self.kb.thresholds))} 条同方向证据，未达到交叉印证要求（≥{need} 条）" if uncorroborated else state.get("stop_reason", "")
+                why = (
+                    f"后验已越过阈值，但只有 {supporting(state['rounds'], verdict_label(p, self.kb.thresholds))} 条同方向证据，未达到交叉印证要求（≥{need} 条）"
+                    if uncorroborated
+                    else "可疑度低于误报阈值，但没有满足「看过载荷且无明确利用载荷、至少两项检查」的结案护栏"
+                    if guard_failed
+                    else state.get("stop_reason", "")
+                )
                 summary = f"证据不足以下结论（后验 {p:.3f}），升级人工研判。原因：{why}。{hint}"
             chain = list(state["chain"])
             chain.append(chain_record(len(chain), "verdict", {"label": label, "posterior": fmt(p)}, chain[-1]["hash"]))
@@ -294,6 +402,7 @@ class Engine:
                 "stop_reason": state.get("stop_reason", ""),
                 "cost_spent": state["budget"] - state["budget_left"],
                 "probes_used": len(state["rounds"]),
+                "success_sign": success_sign,
                 "proof": {"prior": state["prior"], "prior_logodds": round(logit(state["prior"]), 4), "contributions": contributions},
             }
             return {"verdict": verdict, "chain": chain}
@@ -305,6 +414,15 @@ class Engine:
         if label == "malicious":
             actions = [
                 {**a, "status": "pending_approval" if a["approval"] else "auto"} for a in self.kb.alert_types[alert["type"]]["response"]
+            ]
+            if state["verdict"].get("success_sign"):
+                actions.insert(0, {"id": "incident_response", "name": "启动应急响应：响应中出现利用成功迹象，核查目标是否已失陷", "approval": True, "status": "pending_approval"})
+        elif label == "benign" and alert["type"] == WEB:
+            rule = (find_scenario(self.scenarios, alert["id"]).get("record") or {}).get("rule_name", "-")
+            path = str((find_scenario(self.scenarios, alert["id"]).get("record") or {}).get("uri") or "-").split("?", 1)[0][:60]
+            actions = [
+                {"id": "close_fp", "name": "以误报关闭工单（附结案记录）", "approval": False, "status": "auto"},
+                {"id": "whitelist_candidate", "name": f"白名单建议：规则「{rule[:40]}」+ 路径 {path}（复核后才生效）", "approval": True, "status": "pending_approval"},
             ]
         elif label == "benign":
             actions = [
@@ -509,6 +627,7 @@ class Engine:
             "strategy": v["strategy"],
             "budget": v["budget"],
             "prior": v["prior"],
+            "platt": self.kb.platt(v["alert"]["type"]),
             "thresholds": self.kb.thresholds,
             "corroboration": v.get("corroboration", 1),
             "rounds": v.get("rounds", []),

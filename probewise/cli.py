@@ -97,6 +97,45 @@ def cmd_whatif(args) -> None:
     print(c(f"  {r['note']}", "dim"))
 
 
+DEFAULT_DATA = ".datasets/secalertbench/secalertbench.json"
+
+
+def cmd_fetch(args) -> None:
+    from pathlib import Path
+
+    from .netalert.build import fetch_secalertbench
+
+    dest = fetch_secalertbench(Path(args.out))
+    print(f"已下载 SecAlertBench 到 {dest}（该数据集未声明许可证：仅供本地研究使用，请勿再分发）")
+
+
+def cmd_calibrate(args) -> None:
+    from .netalert.build import calibrate, load_records
+
+    kb = calibrate(load_records(args.data))
+    t = kb["alert_types"]["web_attack"]
+    print(f"已学习似然表：训练 {kb['trained_on']} 条、验证 {kb['validated_on']} 条；先验 {t['prior']:.3f}；Platt 校准 a={t['platt']['a']} b={t['platt']['b']}")
+    print(f"验证集 Brier {kb['calibration']['brier']}，ECE {kb['calibration']['ece']}")
+    for pid, p in kb["probes"].items():
+        print(f"  {p['name']}：" + "；".join(f"{o['label']} {o['log_lr']:+.2f}" for o in p["outcomes"].values()))
+
+
+def cmd_evaluate(args) -> None:
+    from .netalert.build import build_eval, load_records
+
+    res = build_eval(load_records(args.data))
+    names = {"time": "按时间（2025→2026）", "random": "随机 70/30", "rule_grouped": "按规则分组（新规则）"}
+    for mode, sp in res["splits"].items():
+        print()
+        print(f"== {names[mode]}：去重后 {sp['records']} 条")
+        print(f"{'策略':<34}{'漏报率':>8}{'自动结案':>9}{'结案精度':>9}{'升级':>8}{'平均检查':>9}")
+        for r in sp["rows"]:
+            print(f"{r['strategy_name']:<30}{r['missed_attack_rate']:>9.2%}{r['auto_close_rate']:>10.1%}{(r['auto_close_precision'] or 0):>10.2%}{r['escalation_rate']:>9.1%}{r['avg_checks']:>9.2f}")
+    inj = res["injection"]
+    print()
+    print(f"注入测试：{inj['injection']['attacks']} 条真攻击植入注入文本后被翻转为误报 {inj['injection']['flipped_to_benign']} 条（对照组 {inj['control']['flipped_to_benign']} 条）")
+
+
 def cmd_serve(args) -> None:
     import uvicorn
 
@@ -163,6 +202,20 @@ def main(argv=None) -> None:
     s.set_defaults(func=cmd_serve)
 
     sub.add_parser("mcp", help="以 stdio 方式运行 MCP Server").set_defaults(func=cmd_mcp)
+
+    d = sub.add_parser("data", help="下载评测数据")
+    d.add_argument("what", choices=["fetch"])
+    d.add_argument("dataset", choices=["secalertbench"])
+    d.add_argument("--out", default=DEFAULT_DATA)
+    d.set_defaults(func=cmd_fetch)
+
+    c = sub.add_parser("calibrate", help="从带标注的历史告警学习网络攻击告警的似然表")
+    c.add_argument("--data", default=DEFAULT_DATA)
+    c.set_defaults(func=cmd_calibrate)
+
+    ev = sub.add_parser("evaluate", help="在真实标注数据上评测（三种切分 + 注入测试）")
+    ev.add_argument("--data", default=DEFAULT_DATA)
+    ev.set_defaults(func=cmd_evaluate)
 
     e = sub.add_parser("export-demo", help="导出静态演示数据")
     e.add_argument("out", nargs="?", default="web/data/demo.json")

@@ -10,9 +10,10 @@ import json
 import os
 import sqlite3
 import threading
+import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,6 +25,7 @@ from .bench import run_bench
 from .graph import STRATEGIES, STRATEGY_NAMES, Engine
 from .kb import load_scenarios
 from .proof import verify, whatif
+from .workbench import FeedbackStore, closing_note, run_queue
 
 WEB_DIR = Path(os.environ.get("PROBEWISE_WEB", Path(__file__).resolve().parent.parent / "web"))
 DB_PATH = os.environ.get("PROBEWISE_DB", "probewise.db")
@@ -32,6 +34,8 @@ _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
 engine = Engine(checkpointer=SqliteSaver(_conn))
 _bench_cache: dict = {}
 _bench_lock = threading.Lock()
+_queue_lock = threading.Lock()
+feedback = FeedbackStore(_conn)
 
 # 部署在网关子路径下时（网关会去掉前缀再转发），PUBLIC_PATH 只用来告诉 API 文档对外地址，
 # 不设置 FastAPI 的 root_path，以免静态文件路由匹配出错
@@ -72,6 +76,22 @@ class WhatIfRequest(BaseModel):
     overrides: dict[str, str]
 
 
+class FeedbackRequest(BaseModel):
+    correct_label: str = Field(pattern="^(malicious|benign|escalate)$")
+    comment: str = Field("", max_length=300)
+    by: str = Field("analyst", max_length=40)
+
+
+def _private_copy(run_id: str) -> str:
+    """队列里的调查（q-*）是所有访客共享的：审批、分叉前先复制一份，只改访客自己的副本。"""
+    if not run_id.startswith("q-"):
+        return run_id
+    t = _get(run_id)
+    new_id = f"{run_id}-{uuid.uuid4().hex[:6]}"
+    engine.start(t["alert"]["id"], run_id=new_id, strategy=t["strategy"], approval_mode="interrupt")
+    return new_id
+
+
 def _get(run_id: str) -> dict:
     try:
         return engine.trace(run_id)
@@ -98,10 +118,14 @@ def kb():
     return {
         "thresholds": engine.kb.thresholds,
         "probes": {
-            k: {"name": p["name"], "cost": p["cost"], "outcomes": {o: {kk: v[kk] for kk in ("label", "p_mal", "p_ben")} for o, v in p["outcomes"].items()}}
+            k: {
+                "name": p["name"],
+                "cost": p["cost"],
+                "outcomes": {o: {**{kk: v[kk] for kk in ("label", "p_mal", "p_ben")}, "log_lr": round(engine.kb.llr(k, o), 6)} for o, v in p["outcomes"].items()},
+            }
             for k, p in engine.kb.probes.items()
         },
-        "alert_types": {k: {"name": t["name"], "prior": t["prior"], "probes": t["probes"]} for k, t in engine.kb.alert_types.items()},
+        "alert_types": {k: {"name": t["name"], "prior": t["prior"], "probes": t["probes"], "platt": engine.kb.platt(k)} for k, t in engine.kb.alert_types.items()},
         "strategies": [{"id": s, "name": STRATEGY_NAMES[s]} for s in STRATEGIES],
     }
 
@@ -122,6 +146,7 @@ def get_run(run_id: str):
 @app.post("/api/runs/{run_id}/approve")
 def approve(run_id: str, req: ApproveRequest):
     _get(run_id)
+    run_id = _private_copy(run_id)
     try:
         return engine.approve(run_id, req.decisions, by=req.by)
     except ValueError as exc:
@@ -131,6 +156,7 @@ def approve(run_id: str, req: ApproveRequest):
 @app.post("/api/runs/{run_id}/fork")
 def fork(run_id: str, req: ForkRequest):
     _get(run_id)
+    run_id = _private_copy(run_id)
     try:
         return engine.fork(run_id, req.evidence_id, req.outcome)
     except (KeyError, ValueError) as exc:
@@ -163,6 +189,44 @@ def what_if(run_id: str, req: WhatIfRequest):
         return whatif(_get(run_id), engine.kb, req.overrides)
     except (KeyError, ValueError) as exc:
         raise HTTPException(400, str(exc))
+
+
+@app.get("/api/queue")
+def queue():
+    """一次研判队列里的全部网络攻击告警，返回排序后的队列、汇总和规则调优建议。"""
+    with _queue_lock:
+        return run_queue(engine)
+
+
+@app.get("/api/runs/{run_id}/note")
+def note(run_id: str):
+    return {"text": closing_note(_get(run_id), engine.scenarios)}
+
+
+@app.post("/api/runs/{run_id}/feedback")
+def add_feedback(run_id: str, req: FeedbackRequest, request: Request):
+    t = _get(run_id)
+    if not t.get("verdict"):
+        raise HTTPException(409, "调查还没有给出判定，暂不能反馈")
+    client = request.headers.get("x-real-ip") or (request.client.host if request.client else "-")
+    try:
+        return feedback.add(run_id, t["alert"]["id"], t["verdict"]["label"], req.correct_label, req.comment, req.by, client)
+    except ValueError as exc:
+        raise HTTPException(429, str(exc))
+
+
+@app.get("/api/feedback")
+def list_feedback():
+    return feedback.list()
+
+
+@app.get("/api/web-eval")
+def web_eval():
+    """在真实标注数据（SecAlertBench）上的评测结果，由 `probewise evaluate` 生成。"""
+    f = Path(__file__).parent / "data" / "web_eval.json"
+    if not f.exists():
+        raise HTTPException(404, "还没有评测结果，请先运行 probewise evaluate")
+    return json.loads(f.read_text(encoding="utf-8"))
 
 
 @app.get("/api/bench")

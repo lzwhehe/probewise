@@ -133,7 +133,7 @@ def test_api_end_to_end():
     from probewise.api import app
 
     client = TestClient(app)
-    assert len(client.get("/api/alerts").json()) == 18
+    assert len([a for a in client.get("/api/alerts").json() if a["type"] != "web_attack"]) == 18
     run = client.post("/api/runs", json={"alert_id": "A-014"}).json()
     assert run["status"] == "awaiting_approval"
     done = client.post(f"/api/runs/{run['run_id']}/approve", json={"decisions": {a["id"]: "approve" for a in run["pending"]}}).json()

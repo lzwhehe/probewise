@@ -1,0 +1,342 @@
+{
+ "source": "SecAlertBench（3 家企业 SOC 的 WAF/IDS 告警，人工标注 Attack / Non-Attack），去重后学习",
+ "trained_on": 4662,
+ "validated_on": 1165,
+ "calibration": {
+  "brier": 0.0264,
+  "ece": 0.0248,
+  "logloss": 0.1018,
+  "logloss_uncalibrated": 0.1238,
+  "reliability": [
+   {
+    "bin": "0.0-0.1",
+    "n": 867,
+    "predicted": 0.001,
+    "observed": 0.002
+   },
+   {
+    "bin": "0.1-0.2",
+    "n": 8,
+    "predicted": 0.162,
+    "observed": 0.5
+   },
+   {
+    "bin": "0.2-0.3",
+    "n": 1,
+    "predicted": 0.235,
+    "observed": 1.0
+   },
+   {
+    "bin": "0.3-0.4",
+    "n": 3,
+    "predicted": 0.332,
+    "observed": 1.0
+   },
+   {
+    "bin": "0.4-0.5",
+    "n": 3,
+    "predicted": 0.436,
+    "observed": 0.0
+   },
+   {
+    "bin": "0.5-0.6",
+    "n": 7,
+    "predicted": 0.521,
+    "observed": 0.0
+   },
+   {
+    "bin": "0.6-0.7",
+    "n": 4,
+    "predicted": 0.651,
+    "observed": 0.5
+   },
+   {
+    "bin": "0.7-0.8",
+    "n": 10,
+    "predicted": 0.75,
+    "observed": 0.9
+   },
+   {
+    "bin": "0.8-0.9",
+    "n": 13,
+    "predicted": 0.862,
+    "observed": 0.615
+   },
+   {
+    "bin": "0.9-1.0",
+    "n": 249,
+    "predicted": 0.986,
+    "observed": 0.936
+   }
+  ]
+ },
+ "probes": {
+  "rule_history": {
+   "name": "规则历史处置",
+   "cost": 1,
+   "outcomes": {
+    "mostly_fp": {
+     "label": "历史上多为误报",
+     "p_mal": 0.02157,
+     "p_ben": 0.935916,
+     "log_lr": -2.995732,
+     "n_mal": 24,
+     "n_ben": 3285,
+     "source": "data"
+    },
+    "mixed": {
+     "label": "历史上好坏参半",
+     "p_mal": 0.167386,
+     "p_ben": 0.050698,
+     "log_lr": 1.194418,
+     "n_mal": 193,
+     "n_ben": 177,
+     "source": "data"
+    },
+    "mostly_attack": {
+     "label": "历史上多为真攻击",
+     "p_mal": 0.594478,
+     "p_ben": 0.002848,
+     "log_lr": 2.995732,
+     "n_mal": 688,
+     "n_ben": 9,
+     "source": "data"
+    },
+    "sparse": {
+     "label": "历史样本太少（不计分）",
+     "p_mal": 0.216566,
+     "p_ben": 0.010538,
+     "log_lr": 0.0,
+     "n_mal": 250,
+     "n_ben": 36,
+     "source": "neutral"
+    }
+   }
+  },
+  "payload_check": {
+   "name": "载荷核验",
+   "cost": 1,
+   "outcomes": {
+    "explicit_exploit": {
+     "label": "明确利用载荷",
+     "p_mal": 0.712435,
+     "p_ben": 0.050427,
+     "log_lr": 2.648155,
+     "n_mal": 824,
+     "n_ben": 176,
+     "source": "data"
+    },
+    "weak_fragment": {
+     "label": "只有弱特征",
+     "p_mal": 0.01468,
+     "p_ben": 0.385185,
+     "log_lr": -2.995732,
+     "n_mal": 16,
+     "n_ben": 1351,
+     "source": "data"
+    },
+    "no_payload": {
+     "label": "未见载荷",
+     "p_mal": 0.272884,
+     "p_ben": 0.564387,
+     "log_lr": -0.726693,
+     "n_mal": 315,
+     "n_ben": 1980,
+     "source": "data"
+    }
+   }
+  },
+  "response_check": {
+   "name": "响应研判",
+   "cost": 1,
+   "outcomes": {
+    "exploit_echo": {
+     "label": "有利用成功迹象",
+     "p_mal": 0.015504,
+     "p_ben": 0.001423,
+     "log_lr": 2.388123,
+     "n_mal": 17,
+     "n_ben": 4,
+     "source": "data"
+    },
+    "not_found_or_rejected": {
+     "label": "资源不存在 / 被拒绝",
+     "p_mal": 0.612403,
+     "p_ben": 0.021349,
+     "log_lr": 2.995732,
+     "n_mal": 710,
+     "n_ben": 74,
+     "source": "data"
+    },
+    "server_error": {
+     "label": "服务端报错",
+     "p_mal": 0.082687,
+     "p_ben": 0.003131,
+     "log_lr": 2.995732,
+     "n_mal": 95,
+     "n_ben": 10,
+     "source": "data"
+    },
+    "auth_or_redirect": {
+     "label": "需认证 / 被重定向",
+     "p_mal": 0.126615,
+     "p_ben": 0.03359,
+     "log_lr": 1.326937,
+     "n_mal": 146,
+     "n_ben": 117,
+     "source": "data"
+    },
+    "no_response": {
+     "label": "无响应记录",
+     "p_mal": 0.099053,
+     "p_ben": 0.133219,
+     "log_lr": -0.296347,
+     "n_mal": 114,
+     "n_ben": 467,
+     "source": "data"
+    },
+    "normal_success": {
+     "label": "正常返回",
+     "p_mal": 0.063738,
+     "p_ben": 0.807287,
+     "log_lr": -2.538896,
+     "n_mal": 73,
+     "n_ben": 2835,
+     "source": "data"
+    }
+   }
+  },
+  "client_profile": {
+   "name": "客户端画像",
+   "cost": 1,
+   "outcomes": {
+    "attack_tool": {
+     "label": "已知扫描器",
+     "p_mal": 0.000863,
+     "p_ben": 0.000854,
+     "log_lr": 0.009731,
+     "n_mal": 0,
+     "n_ben": 2,
+     "source": "data"
+    },
+    "script_client": {
+     "label": "脚本 / 程序库",
+     "p_mal": 0.50906,
+     "p_ben": 0.185132,
+     "log_lr": 1.011494,
+     "n_mal": 589,
+     "n_ben": 649,
+     "source": "data"
+    },
+    "browser": {
+     "label": "浏览器",
+     "p_mal": 0.381363,
+     "p_ben": 0.759897,
+     "log_lr": -0.689431,
+     "n_mal": 441,
+     "n_ben": 2667,
+     "source": "data"
+    },
+    "missing": {
+     "label": "无 User-Agent",
+     "p_mal": 0.108714,
+     "p_ben": 0.054116,
+     "log_lr": 0.697601,
+     "n_mal": 125,
+     "n_ben": 189,
+     "source": "data"
+    }
+   }
+  },
+  "path_profile": {
+   "name": "业务路径画像",
+   "cost": 1,
+   "outcomes": {
+    "business_path": {
+     "label": "像本单位业务系统",
+     "p_mal": 0.00431,
+     "p_ben": 0.728075,
+     "log_lr": -2.995732,
+     "n_mal": 4,
+     "n_ben": 2556,
+     "source": "data"
+    },
+    "attack_path": {
+     "label": "历史多为攻击探测",
+     "p_mal": 0.325,
+     "p_ben": 0.001139,
+     "log_lr": 2.995732,
+     "n_mal": 376,
+     "n_ben": 3,
+     "source": "data"
+    },
+    "mixed_path": {
+     "label": "历史好坏参半",
+     "p_mal": 0.019828,
+     "p_ben": 0.041002,
+     "log_lr": -0.726553,
+     "n_mal": 22,
+     "n_ben": 143,
+     "source": "data"
+    },
+    "unseen_path": {
+     "label": "历史罕见路径",
+     "p_mal": 0.481034,
+     "p_ben": 0.008257,
+     "log_lr": 2.995732,
+     "n_mal": 557,
+     "n_ben": 28,
+     "source": "data"
+    },
+    "generic_path": {
+     "label": "通用路径",
+     "p_mal": 0.169828,
+     "p_ben": 0.221526,
+     "log_lr": -0.265757,
+     "n_mal": 196,
+     "n_ben": 777,
+     "source": "data"
+    }
+   }
+  }
+ },
+ "alert_types": {
+  "web_attack": {
+   "name": "网络攻击告警（WAF / IDS）",
+   "mitre": [
+    {
+     "id": "T1190",
+     "name": "Exploit Public-Facing Application"
+    },
+    {
+     "id": "T1595",
+     "name": "Active Scanning"
+    }
+   ],
+   "response": [
+    {
+     "id": "block_source_ip",
+     "name": "在 WAF 上封禁源 IP 24 小时",
+     "approval": true
+    },
+    {
+     "id": "notify_owner",
+     "name": "通知资产负责人核查该漏洞的修复情况",
+     "approval": false
+    }
+   ],
+   "prior": 0.247856,
+   "platt": {
+    "a": 0.79,
+    "b": -0.2331
+   },
+   "probes": [
+    "rule_history",
+    "payload_check",
+    "response_check",
+    "client_profile",
+    "path_profile"
+   ]
+  }
+ }
+}

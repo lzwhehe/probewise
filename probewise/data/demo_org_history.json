@@ -1,0 +1,9 @@
+{
+  "note": "演示单位过去 90 天已结案告警的路径统计（模拟数据）：真实部署时由工单系统导出。规则级历史来自 SecAlertBench 的统计。",
+  "counts": [
+    ["path", "/erpweb", 2, 420], ["path", "/b2b", 0, 310], ["path", "/report", 1, 180], ["path", "/kb", 0, 95],
+    ["path", "/oa", 0, 260], ["path", "/idp", 1, 140], ["path", "/mes", 0, 75], ["path", "/artifactory", 0, 120],
+    ["path", "/releases", 0, 40], ["path", "/ubuntu", 0, 60], ["path", "/clnt", 0, 150], ["path", "/test", 0, 12],
+    ["path", "/actuator", 0, 30], ["path", "/api", 6, 520]
+  ]
+}

@@ -55,13 +55,27 @@ def verdict_label(posterior: float, thresholds: dict) -> str:
     return "escalate"
 
 
-def recompute(prior: float, readings: list[tuple[str, str]], kb: KnowledgeBase) -> float:
-    """只用先验、知识库和 (检查, 结论) 列表重算后验，不依赖调查过程中的任何中间值。"""
+def apply_guards(label: str, rounds: list, alert_type: str) -> str:
+    """与引擎一致的结案护栏：网络攻击告警判误报，必须看过载荷且没有明确利用载荷、至少两项检查。"""
+    if alert_type == "web_attack" and label == "benign":
+        payload = [r for r in rounds if r.get("probe") == "payload_check"]
+        if not payload or payload[0].get("outcome") == "explicit_exploit" or len(rounds) < 2:
+            return "escalate"
+    return label
+
+
+def recompute(prior: float, readings: list[tuple[str, str]], kb: KnowledgeBase, platt: dict | None = None, skip: set | None = None) -> float:
+    """只用先验、知识库和 (检查, 结论) 列表重算后验，不依赖调查过程中的任何中间值。
+
+    platt：概率校准参数（从历史工单学到的表才有）；skip：核验未通过、不计分的证据序号。
+    """
     x = logit(prior)
-    for probe, outcome in readings:
-        o = kb.outcome(probe, outcome)
-        x += math.log(o["p_mal"] / o["p_ben"])
-    return sigmoid(x)
+    for i, (probe, outcome) in enumerate(readings):
+        if skip and i in skip:
+            continue
+        x += kb.llr(probe, outcome)
+    c = platt or {"a": 1.0, "b": 0.0}
+    return sigmoid(c["a"] * x + c["b"])
 
 
 def verify(trace: dict, kb: KnowledgeBase) -> dict:
@@ -87,9 +101,14 @@ def verify(trace: dict, kb: KnowledgeBase) -> dict:
 
     rounds = [r for r in chain if r["kind"] == "evidence"]
     readings = [(r["probe"], r["outcome"]) for r in rounds]
+    # 校准参数和阈值一律取服务端知识库，不信任调查记录里自带的值（防止伪造记录「自证」）
+    alert_type = chain[0].get("type") if chain else (trace.get("alert") or {}).get("type")
+    platt = kb.platt(alert_type) if alert_type in kb.alert_types else None
+    thresholds = kb.thresholds
     try:
-        recomputed = recompute(trace["prior"], readings, kb)
-        recorded = float(rounds[-1]["posterior"]) if rounds else trace["prior"]
+        skip = {i for i, r in enumerate(rounds) if r.get("unverified")}
+        recomputed = recompute(trace["prior"], readings, kb, platt, skip)
+        recorded = float(rounds[-1]["posterior"]) if rounds else recompute(trace["prior"], [], kb, platt)
         same = abs(recomputed - recorded) < 1e-3
         checks.append(
             {
@@ -104,11 +123,13 @@ def verify(trace: dict, kb: KnowledgeBase) -> dict:
 
     verdict_rec = next((r for r in chain if r["kind"] == "verdict"), None)
     if verdict_rec and recomputed is not None:
-        expected = verdict_label(recomputed, trace["thresholds"])
+        expected = verdict_label(recomputed, thresholds)
         # 交叉印证：结案需要足够多条同方向的证据，否则只能升级
         need = trace.get("corroboration", 1)
-        if expected != "escalate" and supporting_count([r["lr"] for r in rounds], expected) < need:
+        lrs = [1.0 if r.get("unverified") else r["lr"] for r in rounds]
+        if expected != "escalate" and supporting_count(lrs, expected) < need:
             expected = "escalate"
+        expected = apply_guards(expected, rounds, alert_type)
         checks.append(
             {
                 "name": "判定符合阈值",
@@ -128,6 +149,8 @@ def whatif(trace: dict, kb: KnowledgeBase, overrides: dict[str, str]) -> dict:
     overrides: {证据编号: 新的结论选项}
     """
     rounds = [r for r in trace.get("rounds", [])]
+    alert_type = (trace.get("alert") or {}).get("type")
+    platt = kb.platt(alert_type) if alert_type in kb.alert_types else None
     readings = []
     changed = []
     for r in rounds:
@@ -138,12 +161,14 @@ def whatif(trace: dict, kb: KnowledgeBase, overrides: dict[str, str]) -> dict:
             changed.append({"evidence_id": r["evidence_id"], "probe": r["probe"], "from": r["outcome"], "to": outcome})
         readings.append((r["probe"], outcome))
     before = trace["verdict"]["posterior"]
-    after = recompute(trace["prior"], readings, kb)
-    label = verdict_label(after, trace["thresholds"])
+    skip = {i for i, r in enumerate(rounds) if r.get("unverified") and r["evidence_id"] not in overrides}
+    after = recompute(trace["prior"], readings, kb, platt, skip)
+    label = verdict_label(after, kb.thresholds)
     need = trace.get("corroboration", 1)
-    lrs = [kb.outcome(p, o)["p_mal"] / kb.outcome(p, o)["p_ben"] for p, o in readings]
+    lrs = [1.0 if i in skip else math.exp(kb.llr(p, o)) for i, (p, o) in enumerate(readings)]
     if label != "escalate" and supporting_count(lrs, label) < need:
         label = "escalate"
+    label = apply_guards(label, [{"probe": p, "outcome": o} for p, o in readings], alert_type)
     return {
         "changed": changed,
         "before": {"posterior": before, "label": trace["verdict"]["label"]},

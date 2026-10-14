@@ -13,7 +13,8 @@ from .reader import NoisyReader, RuleReader
 
 def run_bench(noise_levels=(0.0, 0.1, 0.2), seeds: int = 10, budget: float = 10, strategies=STRATEGIES) -> dict:
     kb = KnowledgeBase.load()
-    scenarios = load_scenarios()
+    # 基准测试只覆盖合成场景；网络攻击告警在真实标注数据上单独评测（probewise evaluate）
+    scenarios = [s for s in load_scenarios() if s["type"] != "web_attack"]
     truth = {s["id"]: s["ground_truth"] for s in scenarios}
     rows = []
     for noise in noise_levels:

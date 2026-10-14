@@ -14,8 +14,10 @@
     <div class="tag">证据驱动的告警研判 · 每个判定都附带可验证的证明</div>
   </div>
   <nav class="tabs">
-    <button data-view="desk" class="on">调查台</button>
-    <button data-view="bench">基准测试</button>
+    <button data-view="queue" class="on">告警队列</button>
+    <button data-view="eval">真实数据评测</button>
+    <button data-view="desk">合成场景演示</button>
+    <button data-view="bench">合成基准</button>
     <button data-view="about">原理</button>
   </nav>
   <div class="links">
@@ -23,10 +25,35 @@
     <a href="https://github.com/lzwhehe/probewise" target="_blank" rel="noreferrer">GitHub ↗</a>
   </div>
 </header>
-<div class="notice">演示模式：告警、主机、账号和地址均为合成数据，工具返回的是模拟结果；处置动作只做记录，不会真正执行。</div>
+<div class="notice">演示环境：队列中的告警、资产和地址为演示数据；处置动作和白名单只做记录，不会真正执行。</div>
 
 <main>
-  <section id="view-desk" class="view on">
+  <section id="view-queue" class="view on">
+    <div id="wq-main">
+      <div class="panel" id="wq-summary"></div>
+      <div class="panel">
+        <h3>今日告警 <span class="sub">按「成功迹象 → 攻击 → 升级人工 → 误报」排序，点击一行查看调查过程</span></h3>
+        <div id="wq-list"></div>
+      </div>
+      <div class="panel" id="wq-rules"></div>
+    </div>
+    <div id="wq-case" hidden>
+      <button class="btn ghost small" id="wc-back" type="button">← 返回告警队列</button>
+      <div id="wc-body" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section id="view-eval" class="view">
+    <div class="panel">
+      <h3>在真实标注数据上的评测</h3>
+      <div id="ev-intro"></div>
+      <div class="segtabs" id="ev-splits"></div>
+      <div id="ev-body"></div>
+    </div>
+  </section>
+
+  <section id="view-desk" class="view">
+    <div class="notice" style="margin:0 0 12px">合成场景：告警、主机、账号和地址均为合成数据，工具返回的是模拟结果。</div>
     <div class="desk">
       <aside class="panel queue">
         <h3>告警队列 <span class="sub" id="qcount"></span></h3>

@@ -1,0 +1,268 @@
+{
+ "dataset": {
+  "name": "SecAlertBench",
+  "url": "https://github.com/Dxsssu/SecAlertBench",
+  "records": 8322,
+  "deduplicated": 5827
+ },
+ "label_meaning": "Attack = 真实的攻击尝试（扫描、漏洞利用，不论成败）；Non-Attack = 业务流量被规则误报",
+ "thresholds": {
+  "malicious": 0.95,
+  "benign": 0.05
+ },
+ "strategies": {
+  "probewise": "Probewise（信息增益 / 成本，够确定就停）",
+  "probewise-robust": "Probewise 稳健（默认；结案需 2 条同向强证据）",
+  "sop": "固定流程（每项检查都做）",
+  "artifact": "伪特征三行规则（对照，不可用于生产）"
+ },
+ "splits": {
+  "time": {
+   "mode": "time",
+   "seeds": 1,
+   "records": 5827,
+   "train_size": 4968,
+   "rows": [
+    {
+     "strategy": "probewise",
+     "strategy_name": "Probewise（信息增益 / 成本，够确定就停）",
+     "n": 859.0,
+     "attacks": 500.0,
+     "missed_attacks": 10.0,
+     "missed_attack_rate": 0.02,
+     "auto_close_rate": 0.3842,
+     "auto_close_precision": 0.9697,
+     "auto_malicious_rate": 0.5308,
+     "escalation_rate": 0.085,
+     "accuracy_decided": 0.9682,
+     "tpr": 0.98,
+     "fpr": 0.1086,
+     "avg_checks": 2.8487,
+     "brier": 0.0371
+    },
+    {
+     "strategy": "probewise-robust",
+     "strategy_name": "Probewise 稳健（默认；结案需 2 条同向强证据）",
+     "n": 859.0,
+     "attacks": 500.0,
+     "missed_attacks": 3.0,
+     "missed_attack_rate": 0.006,
+     "auto_close_rate": 0.3702,
+     "auto_close_precision": 0.9906,
+     "auto_malicious_rate": 0.5308,
+     "escalation_rate": 0.099,
+     "accuracy_decided": 0.9767,
+     "tpr": 0.994,
+     "fpr": 0.1226,
+     "avg_checks": 3.1432,
+     "brier": 0.0343
+    },
+    {
+     "strategy": "sop",
+     "strategy_name": "固定流程（每项检查都做）",
+     "n": 859.0,
+     "attacks": 500.0,
+     "missed_attacks": 2.0,
+     "missed_attack_rate": 0.004,
+     "auto_close_rate": 0.3714,
+     "auto_close_precision": 0.9937,
+     "auto_malicious_rate": 0.5052,
+     "escalation_rate": 0.1234,
+     "accuracy_decided": 0.9867,
+     "tpr": 0.996,
+     "fpr": 0.117,
+     "avg_checks": 5.0,
+     "brier": 0.0339
+    },
+    {
+     "strategy": "artifact",
+     "strategy_name": "伪特征三行规则（对照，不可用于生产）",
+     "n": 859.0,
+     "attacks": 500.0,
+     "missed_attacks": 18.0,
+     "missed_attack_rate": 0.036,
+     "auto_close_rate": 0.3935,
+     "auto_close_precision": 0.9467,
+     "auto_malicious_rate": 0.6065,
+     "escalation_rate": 0.0,
+     "accuracy_decided": 0.9336,
+     "tpr": 0.964,
+     "fpr": 0.1086,
+     "avg_checks": 0.0,
+     "brier": 0.0664
+    }
+   ]
+  },
+  "random": {
+   "mode": "random",
+   "seeds": 3,
+   "records": 5827,
+   "train_size": 4079,
+   "rows": [
+    {
+     "strategy": "probewise",
+     "strategy_name": "Probewise（信息增益 / 成本，够确定就停）",
+     "n": 1748.0,
+     "attacks": 425.0,
+     "missed_attacks": 9.3333,
+     "missed_attack_rate": 0.022,
+     "auto_close_rate": 0.7157,
+     "auto_close_precision": 0.9925,
+     "auto_malicious_rate": 0.23,
+     "escalation_rate": 0.0543,
+     "accuracy_decided": 0.9837,
+     "tpr": 0.978,
+     "fpr": 0.0615,
+     "avg_checks": 2.4397,
+     "brier": 0.0201
+    },
+    {
+     "strategy": "probewise-robust",
+     "strategy_name": "Probewise 稳健（默认；结案需 2 条同向强证据）",
+     "n": 1748.0,
+     "attacks": 425.0,
+     "missed_attacks": 5.3333,
+     "missed_attack_rate": 0.0125,
+     "auto_close_rate": 0.6808,
+     "auto_close_precision": 0.9956,
+     "auto_malicious_rate": 0.23,
+     "escalation_rate": 0.0892,
+     "accuracy_decided": 0.9856,
+     "tpr": 0.9875,
+     "fpr": 0.1046,
+     "avg_checks": 2.7435,
+     "brier": 0.0201
+    },
+    {
+     "strategy": "sop",
+     "strategy_name": "固定流程（每项检查都做）",
+     "n": 1748.0,
+     "attacks": 425.0,
+     "missed_attacks": 3.0,
+     "missed_attack_rate": 0.0071,
+     "auto_close_rate": 0.6993,
+     "auto_close_precision": 0.9975,
+     "auto_malicious_rate": 0.2256,
+     "escalation_rate": 0.0751,
+     "accuracy_decided": 0.9874,
+     "tpr": 0.9929,
+     "fpr": 0.0784,
+     "avg_checks": 5.0,
+     "brier": 0.0195
+    },
+    {
+     "strategy": "artifact",
+     "strategy_name": "伪特征三行规则（对照，不可用于生产）",
+     "n": 1748.0,
+     "attacks": 425.0,
+     "missed_attacks": 24.3333,
+     "missed_attack_rate": 0.0573,
+     "auto_close_rate": 0.7098,
+     "auto_close_precision": 0.9804,
+     "auto_malicious_rate": 0.2902,
+     "escalation_rate": 0.0,
+     "accuracy_decided": 0.9251,
+     "tpr": 0.9427,
+     "fpr": 0.0806,
+     "avg_checks": 0.0,
+     "brier": 0.0749
+    }
+   ]
+  },
+  "rule_grouped": {
+   "mode": "rule_grouped",
+   "seeds": 3,
+   "records": 5827,
+   "train_size": 3744,
+   "rows": [
+    {
+     "strategy": "probewise",
+     "strategy_name": "Probewise（信息增益 / 成本，够确定就停）",
+     "n": 1920.3333,
+     "attacks": 201.6667,
+     "missed_attacks": 1.6667,
+     "missed_attack_rate": 0.0104,
+     "auto_close_rate": 0.8134,
+     "auto_close_precision": 0.9989,
+     "auto_malicious_rate": 0.0953,
+     "escalation_rate": 0.0913,
+     "accuracy_decided": 0.9947,
+     "tpr": 0.9896,
+     "fpr": 0.0875,
+     "avg_checks": 3.3653,
+     "brier": 0.0111
+    },
+    {
+     "strategy": "probewise-robust",
+     "strategy_name": "Probewise 稳健（默认；结案需 2 条同向强证据）",
+     "n": 1920.3333,
+     "attacks": 201.6667,
+     "missed_attacks": 1.3333,
+     "missed_attack_rate": 0.0095,
+     "auto_close_rate": 0.7244,
+     "auto_close_precision": 0.999,
+     "auto_malicious_rate": 0.0953,
+     "escalation_rate": 0.1803,
+     "accuracy_decided": 0.9937,
+     "tpr": 0.9905,
+     "fpr": 0.1972,
+     "avg_checks": 3.5209,
+     "brier": 0.0111
+    },
+    {
+     "strategy": "sop",
+     "strategy_name": "固定流程（每项检查都做）",
+     "n": 1920.3333,
+     "attacks": 201.6667,
+     "missed_attacks": 1.3333,
+     "missed_attack_rate": 0.0075,
+     "auto_close_rate": 0.8155,
+     "auto_close_precision": 0.9991,
+     "auto_malicious_rate": 0.0867,
+     "escalation_rate": 0.0977,
+     "accuracy_decided": 0.9966,
+     "tpr": 0.9925,
+     "fpr": 0.0851,
+     "avg_checks": 5.0,
+     "brier": 0.0101
+    },
+    {
+     "strategy": "artifact",
+     "strategy_name": "伪特征三行规则（对照，不可用于生产）",
+     "n": 1920.3333,
+     "attacks": 201.6667,
+     "missed_attacks": 15.3333,
+     "missed_attack_rate": 0.0648,
+     "auto_close_rate": 0.8689,
+     "auto_close_precision": 0.9896,
+     "auto_malicious_rate": 0.1311,
+     "escalation_rate": 0.0,
+     "accuracy_decided": 0.961,
+     "tpr": 0.9352,
+     "fpr": 0.0345,
+     "avg_checks": 0.0,
+     "brier": 0.039
+    }
+   ]
+  }
+ },
+ "injection": {
+  "injection": {
+   "attacks": 500,
+   "flipped_to_benign": 0,
+   "rate": 0.0
+  },
+  "control": {
+   "attacks": 500,
+   "flipped_to_benign": 0,
+   "rate": 0.0
+  }
+ },
+ "paper_llm_context": {
+  "note": "SecAlertBench 论文：16 个 LLM 直接研判的平均值（不同切分、不同协议，仅作背景参考，不可直接比较）",
+  "url": "https://github.com/Dxsssu/SecAlertBench",
+  "tpr": 0.7971,
+  "fpr": 0.4413
+ },
+ "elapsed_s": 52.7
+}
