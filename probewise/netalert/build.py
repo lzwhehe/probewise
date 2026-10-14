@@ -108,5 +108,10 @@ def build_eval(records: list[dict], out_dir: Path = DATA_DIR) -> dict:
     for s in result["splits"].values():
         s.pop("kb", None)
     result["elapsed_s"] = round(time.time() - started, 1)
+    old = out_dir / "web_eval.json"
+    if old.exists():  # 保留大模型实验结果（experiments/llm_eval.py 写入，需要 GPU，不随这里重跑）
+        prev = json.loads(old.read_text(encoding="utf-8"))
+        if "llm_experiments" in prev:
+            result["llm_experiments"] = prev["llm_experiments"]
     (out_dir / "web_eval.json").write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
     return result

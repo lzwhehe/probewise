@@ -264,5 +264,185 @@
   "tpr": 0.7971,
   "fpr": 0.4413
  },
- "elapsed_s": 52.7
+ "elapsed_s": 52.7,
+ "llm_experiments": {
+  "qwen2.5-7b": {
+   "model": "qwen2.5-7b",
+   "test_size": 859,
+   "test_attacks": 500,
+   "calibration_sample": 1200,
+   "llm_table": {
+    "malicious": {
+     "label": "复核认为是攻击",
+     "p_mal": 0.5789,
+     "p_ben": 0.589,
+     "log_lr": -0.0171,
+     "n_mal": 131,
+     "n_ben": 575
+    },
+    "benign": {
+     "label": "复核认为是业务流量",
+     "p_mal": 0.2149,
+     "p_ben": 0.3098,
+     "log_lr": -0.3657,
+     "n_mal": 48,
+     "n_ben": 302
+    },
+    "unsure": {
+     "label": "复核也无法判断",
+     "p_mal": 0.2061,
+     "p_ben": 0.1012,
+     "log_lr": 0.7112,
+     "n_mal": 46,
+     "n_ben": 98
+    }
+   },
+   "llm_outcomes_on_test": {
+    "malicious": 453,
+    "benign": 266,
+    "unsure": 140
+   },
+   "direct": {
+    "n": 859,
+    "attacks": 500,
+    "missed_attacks": 157,
+    "missed_attack_rate": 0.314,
+    "auto_close_rate": 0.309662398137369,
+    "auto_close_precision": 0.40977443609022557,
+    "auto_malicious_rate": 0.5273573923166472,
+    "escalation_rate": 0.1629802095459837,
+    "accuracy_decided": 0.5006954102920723,
+    "tpr": 0.686,
+    "fpr": 0.6963788300835655,
+    "avg_checks": 0.0,
+    "brier": 0.4586728754365541
+   },
+   "injection": {
+    "attacks": 500,
+    "llm_direct_flipped_to_benign": 287,
+    "probewise_with_llm_flipped_to_benign": 0
+   },
+   "probewise_with_llm": {
+    "n": 859,
+    "attacks": 500,
+    "missed_attacks": 3,
+    "missed_attack_rate": 0.006,
+    "auto_close_rate": 0.370197904540163,
+    "auto_close_precision": 0.9905660377358491,
+    "auto_malicious_rate": 0.5308498253783469,
+    "escalation_rate": 0.0989522700814901,
+    "accuracy_decided": 0.9767441860465116,
+    "tpr": 0.994,
+    "fpr": 0.12256267409470752,
+    "avg_checks": 3.1431897555296855,
+    "brier": 0.03432301373476776,
+    "llm_calls": 0
+   },
+   "probewise": {
+    "n": 859,
+    "attacks": 500,
+    "missed_attacks": 3,
+    "missed_attack_rate": 0.006,
+    "auto_close_rate": 0.370197904540163,
+    "auto_close_precision": 0.9905660377358491,
+    "auto_malicious_rate": 0.5308498253783469,
+    "escalation_rate": 0.0989522700814901,
+    "accuracy_decided": 0.9767441860465116,
+    "tpr": 0.994,
+    "fpr": 0.12256267409470752,
+    "avg_checks": 3.1431897555296855,
+    "brier": 0.03432301373476776,
+    "llm_calls": 0
+   }
+  },
+  "llama3.1-8b": {
+   "model": "llama3.1-8b",
+   "test_size": 859,
+   "test_attacks": 500,
+   "calibration_sample": 1200,
+   "llm_table": {
+    "malicious": {
+     "label": "复核认为是攻击",
+     "p_mal": 0.2939,
+     "p_ben": 0.1319,
+     "log_lr": 0.801,
+     "n_mal": 66,
+     "n_ben": 128
+    },
+    "benign": {
+     "label": "复核认为是业务流量",
+     "p_mal": 0.5482,
+     "p_ben": 0.7393,
+     "log_lr": -0.2989,
+     "n_mal": 124,
+     "n_ben": 722
+    },
+    "unsure": {
+     "label": "复核也无法判断",
+     "p_mal": 0.1579,
+     "p_ben": 0.1288,
+     "log_lr": 0.2034,
+     "n_mal": 35,
+     "n_ben": 125
+    }
+   },
+   "llm_outcomes_on_test": {
+    "malicious": 175,
+    "benign": 521,
+    "unsure": 163
+   },
+   "direct": {
+    "n": 859,
+    "attacks": 500,
+    "missed_attacks": 271,
+    "missed_attack_rate": 0.542,
+    "auto_close_rate": 0.6065192083818394,
+    "auto_close_precision": 0.4798464491362764,
+    "auto_malicious_rate": 0.20372526193247964,
+    "escalation_rate": 0.18975552968568102,
+    "accuracy_decided": 0.5502873563218391,
+    "tpr": 0.458,
+    "fpr": 0.30362116991643456,
+    "avg_checks": 0.0,
+    "brier": 0.4118160651920838
+   },
+   "injection": {
+    "attacks": 500,
+    "llm_direct_flipped_to_benign": 148,
+    "probewise_with_llm_flipped_to_benign": 0
+   },
+   "probewise_with_llm": {
+    "n": 859,
+    "attacks": 500,
+    "missed_attacks": 3,
+    "missed_attack_rate": 0.006,
+    "auto_close_rate": 0.370197904540163,
+    "auto_close_precision": 0.9905660377358491,
+    "auto_malicious_rate": 0.5308498253783469,
+    "escalation_rate": 0.0989522700814901,
+    "accuracy_decided": 0.9767441860465116,
+    "tpr": 0.994,
+    "fpr": 0.12256267409470752,
+    "avg_checks": 3.190919674039581,
+    "brier": 0.034276878765508514,
+    "llm_calls": 41
+   },
+   "probewise": {
+    "n": 859,
+    "attacks": 500,
+    "missed_attacks": 3,
+    "missed_attack_rate": 0.006,
+    "auto_close_rate": 0.370197904540163,
+    "auto_close_precision": 0.9905660377358491,
+    "auto_malicious_rate": 0.5308498253783469,
+    "escalation_rate": 0.0989522700814901,
+    "accuracy_decided": 0.9767441860465116,
+    "tpr": 0.994,
+    "fpr": 0.12256267409470752,
+    "avg_checks": 3.1431897555296855,
+    "brier": 0.03432301373476776,
+    "llm_calls": 0
+   }
+  }
+ }
 }

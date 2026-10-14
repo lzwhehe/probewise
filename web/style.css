@@ -267,3 +267,4 @@ textarea.note { width: 100%; font-family: var(--mono); font-size: 12px; color: v
   .panel { padding: 12px; }
   .stat .n { font-size: 22px; }
 }
+.btable td.pwc { color: var(--accent); }
