@@ -191,25 +191,40 @@ async function run(id) {
 }
 
 // ---------- 调查过程 ----------
-function renderChart(t) {
-  const W = 640, H = 190, pad = { l: 34, r: 14, t: 12, b: 24 };
-  const pts = [t.prior, ...t.rounds.map((r) => r.posterior_after)];
+function renderChart(t, el = $("chart")) {
+  if (!el) return;
+  // 固定坐标系 + 等比缩放（不拉伸），标签避开上下边界和阈值线
+  // 坐标系宽度跟随实际显示宽度：手机上文字不会被等比缩得太小
+  const W = Math.max(320, Math.min(900, Math.round(el.clientWidth || el.parentElement?.clientWidth || 640))), H = 210, pad = { l: 38, r: 22, t: 26, b: 28 };
+  const start = t.rounds.length ? t.rounds[0].posterior_before : t.prior;
+  const pts = [start, ...t.rounds.map((r) => r.posterior_after)];
   const n = Math.max(pts.length - 1, 1);
   const X = (i) => pad.l + ((W - pad.l - pad.r) * i) / n;
   const Y = (p) => pad.t + (H - pad.t - pad.b) * (1 - p);
   const th = t.thresholds;
   const band = (y1, y2, color) => `<rect x="${pad.l}" y="${Y(y2)}" width="${W - pad.l - pad.r}" height="${Y(y1) - Y(y2)}" fill="${color}" opacity=".10"/>`;
-  const line = pts.map((p, i) => `${i ? "L" : "M"}${X(i)},${Y(p)}`).join(" ");
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p).toFixed(1)}`).join(" ");
+  const anchor = (i) => (pts.length > 1 && i === pts.length - 1 ? "end" : i === 0 ? "start" : "middle");
+  const labelY = (p) => {
+    const y = Y(p);
+    const above = y - 9, below = y + 17;
+    const nearTh = (yy) => Math.abs(yy - Y(th.malicious)) < 6 || Math.abs(yy - Y(th.benign)) < 6;
+    if (above < pad.t - 10 || (nearTh(above) && !nearTh(below) && below < H - pad.b - 4)) return below;
+    return above;
+  };
   const dots = pts
     .map((p, i) => `<circle cx="${X(i)}" cy="${Y(p)}" r="4" fill="${p >= 0.5 ? "#f87171" : "#4ade80"}"/>
-      <text x="${X(i)}" y="${H - 6}" text-anchor="middle">${i ? t.rounds[i - 1].evidence_id : "先验"}</text>
-      <text x="${X(i)}" y="${Y(p) - 8}" text-anchor="middle">${p.toFixed(2)}</text>`)
+      <text x="${X(i)}" y="${H - 8}" text-anchor="${anchor(i)}">${i ? t.rounds[i - 1].evidence_id : "起点"}</text>
+      <text x="${X(i)}" y="${labelY(p)}" text-anchor="${anchor(i)}" class="pv">${(p * 100).toFixed(p >= 0.995 || p <= 0.005 ? 1 : 0)}%</text>`)
     .join("");
-  $("chart").innerHTML = `
+  el.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  el.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  el.innerHTML = `
     ${band(th.malicious, 1, "#f87171")}${band(0, th.benign, "#4ade80")}
     <line x1="${pad.l}" x2="${W - pad.r}" y1="${Y(th.malicious)}" y2="${Y(th.malicious)}" stroke="#f87171" stroke-dasharray="4 4" opacity=".6"/>
     <line x1="${pad.l}" x2="${W - pad.r}" y1="${Y(th.benign)}" y2="${Y(th.benign)}" stroke="#4ade80" stroke-dasharray="4 4" opacity=".6"/>
-    <text x="4" y="${Y(th.malicious) + 4}">${th.malicious}</text><text x="4" y="${Y(th.benign) + 4}">${th.benign}</text>
+    <text x="${pad.l - 6}" y="${Y(th.malicious) + 4}" text-anchor="end">${th.malicious * 100}%</text>
+    <text x="${pad.l - 6}" y="${Y(th.benign) + 4}" text-anchor="end">${th.benign * 100}%</text>
     <path d="${line}" fill="none" stroke="#5eead4" stroke-width="2.5"/>${dots}`;
 }
 
@@ -718,6 +733,7 @@ function renderCase(t) {
     <div class="case">
       <div class="panel rawpanel">${renderRawAlert(t)}</div>
       <div class="cright">
+        <div class="panel"><h3>可疑度变化 <span class="sub">高于 95% 判攻击，低于 5% 判误报自动关闭，中间交给人工</span></h3><svg id="wc-chart" class="chart"></svg></div>
         <div class="panel"><h3>调查过程 <span class="sub">控制器按「信息增益 ÷ 成本」挑选下一项检查，交给对应的子 Agent；子 Agent 交回的证据先核验再记账</span></h3>${renderTimeline(t)}</div>
         <div class="panel" id="wc-proof"></div>
         <div class="panel" id="wc-actions"></div>
@@ -725,6 +741,7 @@ function renderCase(t) {
         <div class="panel" id="wc-feedback"></div>
       </div>
     </div>`;
+  renderChart(t, $("wc-chart"));
   if (t.verdict) renderProof(t, $("wc-proof")); else $("wc-proof").remove();
   renderActions(t, $("wc-actions"), W.decisions, (d) => { W.trace = d; W.queue = null; renderCase(d); });
   renderFeedback(t);
@@ -852,7 +869,8 @@ async function loadDesk() {
   deskLoaded = true;
   try {
     await kbReady();
-    S.alerts = await api("alerts");
+    // 合成场景演示只列合成场景；网络攻击告警在「告警队列」里
+    S.alerts = (await api("alerts")).filter((a) => a.type !== "web_attack");
     renderQueue();
     await selectAlert("A-004");
   } catch (e) {

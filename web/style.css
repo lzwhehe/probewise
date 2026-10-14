@@ -69,7 +69,8 @@ select, input[type=number], input[type=text] { font: inherit; font-size: 13px; c
 .btn.small { padding: 3px 10px; font-size: 12.5px; }
 
 /* 后验曲线 */
-.chart { width: 100%; height: 190px; }
+.chart { width: 100%; height: auto; max-height: 260px; display: block; }
+.chart text.pv { fill: var(--text); font-weight: 600; }
 .chart text { fill: var(--mute); font-size: 11px; font-family: var(--f); }
 
 /* 轮次 */
